@@ -51,10 +51,8 @@ class AnimeStoreAcceptDialog extends StatelessWidget {
                   child: Text(locale.cancel),
                   style: ElevatedButton.styleFrom(
                     shape: defaultShape,
-                    primary: accentColor,
-                    textStyle: TextStyle(
-                      color: Colors.white,
-                    ),
+                    backgroundColor: accentColor,
+                    foregroundColor: Colors.white,
                   ),
                 ),
 

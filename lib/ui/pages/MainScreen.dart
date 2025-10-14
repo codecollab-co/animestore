@@ -48,7 +48,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _getCurrentPage() {
-    var widget;
+    Widget widget;
     switch (currentNav) {
       case MainScreenNavigation.HOME:
         widget = HomePage();

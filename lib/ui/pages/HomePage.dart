@@ -44,7 +44,7 @@ class _HomePageState extends State<HomePage>
   late Animation<Offset> carouselAnimation;
   late Animation<Offset> headerAnimation;
   final GlobalKey<RefreshIndicatorState> refreshIndicatorKey =
-      new GlobalKey<RefreshIndicatorState>();
+      GlobalKey<RefreshIndicatorState>();
 
   @override
   void initState() {
@@ -226,7 +226,7 @@ class _HomePageState extends State<HomePage>
           _createHorizontaAnimelList(appStore,
               data: appStore.mostRecentAnimeList,
               width: size.width * .42,
-              tag: HERO_TAG_RELEASE,
+              tag: heroTagRelease,
               controller: mostRecentController),
           genresHeader,
           _createHorizontalGenreList(
@@ -243,7 +243,7 @@ class _HomePageState extends State<HomePage>
                 : _createHorizontaCustomAnimelList(
                     appStore,
                     width: size.width * .42,
-                    tag: HERO_TAG_MY_LIST,
+                    tag: heroTagMyList,
                     controller: myListController,
                   ),
           ),
@@ -505,7 +505,7 @@ class _HomePageState extends State<HomePage>
                   ? 12
                   : appStore.dayReleaseList.length, (index) {
             var heroTag =
-                '${appStore.dayReleaseList[index].id}$HERO_TAG_CAROUSEL';
+                '${appStore.dayReleaseList[index].id}$heroTagCarousel';
             return ItemView(
               borderRadius: .0,
               tooltip: appStore.dayReleaseList[index].title,

@@ -147,7 +147,7 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
               // sliver header with tab bars
               Observer(
                 builder: (_) {
-                  var widget;
+                  Widget widget;
                   switch (detailsStore.loadingStatus) {
                     case LoadingStatus.DONE:
                       widget = SliverPersistentHeader(
@@ -589,7 +589,7 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(25)),
-                    primary: accentColor,
+                    backgroundColor: accentColor,
                   ),
                 ),
               ),
@@ -613,7 +613,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return new Container(
+    return Container(
       color: primaryColor,
       child: SafeArea(
         child: _tabBar,
