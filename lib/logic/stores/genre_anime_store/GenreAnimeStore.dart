@@ -45,18 +45,18 @@ abstract class _GenreAnimeStore with Store {
     try {
       List<AnimeItem> results = [];
 
-      if (_currentPageNumber <= _maxPageNumber){
-        var pageInfo = await _loadData(this.genre,_currentPageNumber );
+      if (_currentPageNumber <= _maxPageNumber) {
+        var pageInfo = await _loadData(genre, _currentPageNumber);
         _currentPageNumber++;
-        _maxPageNumber = int.parse( pageInfo.maxPageNumber );
+        _maxPageNumber = int.parse(pageInfo.maxPageNumber);
 
-        results.addAll( pageInfo.animes );
+        results.addAll(pageInfo.animes);
 
-        if ((_currentPageNumber + PAGE_LOAD_NUMBER ) <= _maxPageNumber ){
-          for(var i=0 ; i < PAGE_LOAD_NUMBER; i++){
-            var pageData = await _loadData(this.genre, _currentPageNumber);
+        if ((_currentPageNumber + PAGE_LOAD_NUMBER) <= _maxPageNumber) {
+          for (var i = 0; i < PAGE_LOAD_NUMBER; i++) {
+            var pageData = await _loadData(genre, _currentPageNumber);
             _currentPageNumber++;
-            results.addAll( pageData.animes );
+            results.addAll(pageData.animes);
           }
         }
         setAnimesItem(results);
@@ -64,7 +64,7 @@ abstract class _GenreAnimeStore with Store {
 
       setLoadingStatus(LoadingStatus.DONE);
     }
-    on CrawlerApiException catch(ex){
+    } on CrawlerApiException catch (ex) {
       print(ex);
       setLoadingStatus(LoadingStatus.ERROR);
     }
@@ -75,22 +75,22 @@ abstract class _GenreAnimeStore with Store {
     if (isLoadingMore)
       return;
 
-    if (_currentPageNumber <= _maxPageNumber){
+    if (_currentPageNumber <= _maxPageNumber) {
       try {
         setIsLoadingMore(true);
         List<AnimeItem> results = [];
 
-        for(var i=0 ; i < PAGE_LOAD_NUMBER; i++){
-          var pageData = await _loadData(this.genre, _currentPageNumber);
+        for (var i = 0; i < PAGE_LOAD_NUMBER; i++) {
+          var pageData = await _loadData(genre, _currentPageNumber);
           _currentPageNumber++;
-          results.addAll( pageData.animes );
+          results.addAll(pageData.animes);
         }
 
         setIsLoadingMore(false);
         addAnimeItems(results);
       }
 
-      on CrawlerApiException catch(ex){
+      } on CrawlerApiException catch (ex) {
         print(ex);
         setIsLoadingMore(false);
       }

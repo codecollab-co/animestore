@@ -89,7 +89,7 @@ abstract class _VideoPlayerStore with Store {
         );
 
         await controller!.initialize().timeout(
-              Duration(seconds: VIDEO_INIT_TIMEOUT),
+              Duration(seconds: videoInitTimeout),
             );
 
         controller!.addListener(_controllerListener);

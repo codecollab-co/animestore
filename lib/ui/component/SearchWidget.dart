@@ -95,7 +95,7 @@ class _SearchWidgetState extends State<SearchWidget> {
         appBar,
         Observer(
           builder: (context) {
-            var widget;
+            Widget widget;
 
             switch (searchStore.searchState) {
               case SearchState.SEARCHING:
@@ -120,7 +120,7 @@ class _SearchWidgetState extends State<SearchWidget> {
                     _centerDecoration(size, Icons.search, '${locale.search}');
                 break;
               case SearchState.ERROR:
-                _centerDecoration(size, Icons.error, locale.searchErrorMessage);
+                widget = _centerDecoration(size, Icons.error, locale.searchErrorMessage);
                 break;
             }
             return widget;

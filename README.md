@@ -39,3 +39,31 @@ There is two ways to install Anime Store app. The first one and most easy is get
 **Notes:**
 > * On Android ```flutter run --release``` build type will fail because you haven't the build release KEY.
 > * On iOS the app is running fine but it wasn't published on App Store.
+
+## Recent Code Improvements (v1.5.1)
+
+This release includes significant code consistency and quality improvements:
+
+### **🔧 Code Consistency Fixes**
+- **Removed inconsistent 'new' keyword usage** - Modernized constructor calls across the codebase
+- **Standardized variable declarations** - Changed `var widget;` to `Widget widget;` for better type safety
+- **Fixed constant naming conventions** - Updated to camelCase: `HERO_TAG_UPDATE` → `heroTagUpdate`
+- **Organized imports consistently** - Applied Dart conventions (Flutter → packages → local imports)
+
+### **🚀 Flutter API Updates**
+- **Fixed deprecated `bodyText2`** → `bodyMedium` in TextTheme
+- **Updated `ElevatedButton.styleFrom`** - Replaced deprecated `primary` with `backgroundColor`
+- **Modernized button styling** - Updated to current Flutter best practices
+
+### **🧹 Code Cleanup**
+- **Removed dead code** - Deleted unused `DecisionDialog.dart` with commented-only content
+- **Standardized catch block formatting** - Consistent error handling patterns
+- **Fixed code spacing and formatting** - Applied consistent formatting rules
+- **Removed unnecessary imports** - Cleaned up unused Cupertino imports
+
+### **📁 Files Modified**
+- 13 files updated for consistency and modern Flutter practices
+- 1 unused file removed
+- All changes maintain backward compatibility
+
+These improvements enhance code maintainability, reduce technical debt, and ensure compatibility with current Flutter versions.
