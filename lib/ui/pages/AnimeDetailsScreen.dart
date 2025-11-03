@@ -1,37 +1,67 @@
 import 'package:anime_app/generated/l10n.dart';
-import 'package:anime_app/logic/stores/StoreUtils.dart';
-import 'package:anime_app/logic/stores/anime_details_store/AnimeDetailsStore.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
+import 'package:anime_app/logic/blocs/anime_details/anime_details_bloc.dart';
+import 'package:anime_app/logic/blocs/anime_details/anime_details_event.dart';
+import 'package:anime_app/logic/blocs/anime_details/anime_details_state.dart';
+import 'package:anime_app/logic/blocs/application/application_bloc.dart';
+import 'package:anime_app/logic/blocs/application/application_event.dart';
+import 'package:anime_app/logic/blocs/application/application_state.dart';
+import 'package:anime_app/data/repositories/anime_repository.dart';
+import 'package:anime_app/data/repositories/search_repository.dart';
+import 'package:anime_app/models/anime_model.dart';
 import 'package:anime_app/ui/component/notification/CustomListNotification.dart';
 import 'package:anime_app/ui/component/video/VideoWidget.dart';
 import 'package:anime_app/ui/theme/ColorValues.dart';
-import 'package:anitube_crawler_api/anitube_crawler_api.dart';
+import 'package:anime_app/ui/component/ItemView.dart';
 import 'package:bot_toast/bot_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/widgets.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:provider/provider.dart';
-import 'package:anime_app/ui/component/ItemView.dart';
-import '../theme/ColorValues.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../utils/UiUtils.dart';
 
-class AnimeDetailsScreen extends StatefulWidget {
+class AnimeDetailsScreen extends StatelessWidget {
   final String? heroTag;
+  final AnimeModel anime;
 
-  const AnimeDetailsScreen({Key? key, this.heroTag}) : super(key: key);
+  const AnimeDetailsScreen({
+    Key? key,
+    this.heroTag,
+    required this.anime,
+  }) : super(key: key);
 
   @override
-  State<StatefulWidget> createState() => _AnimeDetailsScreen();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => AnimeDetailsBloc(
+        animeRepository: AnimeRepository(),
+        searchRepository: SearchRepository(),
+        anime: anime,
+      )..add(AnimeDetailsLoadRequested(anime: anime)),
+      child: _AnimeDetailsContent(
+        heroTag: heroTag,
+        anime: anime,
+      ),
+    );
+  }
 }
 
-class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
+class _AnimeDetailsContent extends StatefulWidget {
+  final String? heroTag;
+  final AnimeModel anime;
+
+  const _AnimeDetailsContent({
+    Key? key,
+    this.heroTag,
+    required this.anime,
+  }) : super(key: key);
+
+  @override
+  State<StatefulWidget> createState() => _AnimeDetailsContentState();
+}
+
+class _AnimeDetailsContentState extends State<_AnimeDetailsContent>
     with SingleTickerProviderStateMixin {
   static const _RELATED_TAG = 'RELATED_TAG';
-  late ApplicationStore applicationStore;
-  late AnimeDetailsStore detailsStore;
   late S locale;
   late AnimationController animationController;
   late Animation<Offset> slideAnimation;
@@ -52,13 +82,9 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
   @override
   void initState() {
     super.initState();
-    detailsStore = Provider.of<AnimeDetailsStore>(context, listen: false);
-    detailsStore.loadAnimeDetails();
 
     animationController = AnimationController(
         vsync: this, duration: Duration(milliseconds: 2000));
-
-    applicationStore = Provider.of<ApplicationStore>(context, listen: false);
 
     slideAnimation =
         Tween<Offset>(begin: Offset(400, .0), end: Offset.zero).animate(
@@ -80,7 +106,7 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
     final size = MediaQuery.of(context).size;
     final expandedHeight = size.width * .9;
     final provider = CachedNetworkImageProvider(
-      detailsStore.currentAnimeItem.imageUrl,
+      widget.anime.imageUrl,
     );
 
     final image = Image(
@@ -88,9 +114,9 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
       image: provider,
     );
 
-    // in the future add an Observer widget to
-    // handle the  image predominant color as background color
-    //detailsStore.backgroundColor
+    // in the future add a BlocBuilder widget to
+    // handle the image predominant color as background color
+    // state.backgroundColor
     final appBar = SliverAppBar(
       floating: false,
       pinned: false,
@@ -107,29 +133,35 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
     );
 
     return Scaffold(
-      floatingActionButton: Observer(builder: (_) {
-        if (detailsStore.loadingStatus != LoadingStatus.DONE)
-          return Container();
-        bool isInList = (applicationStore.myAnimeMap
-            .containsKey(detailsStore.currentAnimeItem.id));
+      floatingActionButton: BlocBuilder<AnimeDetailsBloc, AnimeDetailsState>(
+        builder: (context, detailsState) {
+          if (detailsState is! AnimeDetailsLoaded) {
+            return Container();
+          }
 
-        return AnimatedBuilder(
-          animation: animationController,
-          builder: (_, __) => Transform.scale(
-            scale: scaleAnimation.value,
-            origin: Offset.zero,
-            child: FloatingActionButton.extended(
-              backgroundColor: accentColor,
-              onPressed: () => (isInList) ? _removeFromList() : _addToList(),
-              label:
-                  Text((isInList) ? locale.removeFromList : locale.addToList),
-              icon: Icon((isInList)
-                  ? Icons.remove_circle_outline
-                  : Icons.add_circle_outline),
-            ),
-          ),
-        );
-      }),
+          return BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, appState) {
+              bool isInList = appState.myAnimeMap.containsKey(widget.anime.id);
+
+              return AnimatedBuilder(
+                animation: animationController,
+                builder: (_, __) => Transform.scale(
+                  scale: scaleAnimation.value,
+                  origin: Offset.zero,
+                  child: FloatingActionButton.extended(
+                    backgroundColor: accentColor,
+                    onPressed: () => (isInList) ? _removeFromList() : _addToList(),
+                    label: Text((isInList) ? locale.removeFromList : locale.addToList),
+                    icon: Icon((isInList)
+                        ? Icons.remove_circle_outline
+                        : Icons.add_circle_outline),
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
       body: DefaultTabController(
         length: 2,
         child: NestedScrollView(
@@ -141,39 +173,35 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                 sliver: appBar,
               ),
               SliverToBoxAdapter(
-                child: animeTitleSection(detailsStore.currentAnimeItem.title),
+                child: animeTitleSection(widget.anime.title),
               ),
 
               // sliver header with tab bars
-              Observer(
-                builder: (_) {
+              BlocBuilder<AnimeDetailsBloc, AnimeDetailsState>(
+                builder: (context, state) {
                   Widget widget;
-                  switch (detailsStore.loadingStatus) {
-                    case LoadingStatus.DONE:
-                      widget = SliverPersistentHeader(
-                        pinned: true,
-                        floating: true,
-                        delegate: _SliverAppBarDelegate(
-                          TabBar(
-                            labelColor: Colors.white,
-                            indicatorColor: Colors.white,
-                            tabs: <Widget>[
-                              Tab(
-                                text: locale.episodes,
-                              ),
-                              Tab(
-                                text: locale.animeDetails,
-                              ),
-                            ],
-                          ),
-                          offsetValue: MediaQuery.of(context).padding.bottom,
+                  if (state is AnimeDetailsLoaded) {
+                    widget = SliverPersistentHeader(
+                      pinned: true,
+                      floating: true,
+                      delegate: _SliverAppBarDelegate(
+                        TabBar(
+                          labelColor: Colors.white,
+                          indicatorColor: Colors.white,
+                          tabs: <Widget>[
+                            Tab(
+                              text: locale.episodes,
+                            ),
+                            Tab(
+                              text: locale.animeDetails,
+                            ),
+                          ],
                         ),
-                      );
-                      break;
-
-                    default:
-                      widget = emptySliver;
-                      break;
+                        offsetValue: MediaQuery.of(context).padding.bottom,
+                      ),
+                    );
+                  } else {
+                    widget = emptySliver;
                   }
 
                   return widget;
@@ -181,24 +209,30 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
               ),
             ];
           },
-          body: Observer(
-            builder: (context) {
-              if (detailsStore.loadingStatus == LoadingStatus.ERROR)
+          body: BlocBuilder<AnimeDetailsBloc, AnimeDetailsState>(
+            builder: (context, state) {
+              if (state is AnimeDetailsError) {
                 return SingleChildScrollView(child: buildErrorWidget());
+              }
 
-              if (detailsStore.loadingStatus == LoadingStatus.LOADING)
+              if (state is AnimeDetailsLoading) {
                 return Container(
                   child: UiUtils.centredDotLoader(),
                 );
+              }
+
+              if (state is! AnimeDetailsLoaded) {
+                return Container();
+              }
 
               return TabBarView(
                 children: <Widget>[
                   _createWithSlideTransition(
-                      child: buildEpisodesSection(),
+                      child: buildEpisodesSection(state),
                       animation: slideAnimation,
                       controller: animationController),
                   _createWithSlideTransition(
-                      child: buildMoreDetailsSection(),
+                      child: buildMoreDetailsSection(state),
                       animation: slideAnimation,
                       controller: animationController),
                 ],
@@ -223,7 +257,10 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
     );
   }
 
-  Widget buildEpisodesSection() {
+  Widget buildEpisodesSection(AnimeDetailsLoaded state) {
+    final episodes = state.episodes;
+    if (episodes == null || episodes.isEmpty) return Container();
+
     return SafeArea(
       top: false,
       bottom: false,
@@ -231,74 +268,77 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
         shrinkWrap: true,
         physics: BouncingScrollPhysics(),
         slivers: <Widget>[
-          (detailsStore.animeDetails.episodes.isEmpty)
-              ? SliverToBoxAdapter(
-                  child: _buildUnavaiableWidget(locale.episodesComingSoon,
-                      iconData: Icons.update),
-                )
-              : SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    var episodeId =
-                        detailsStore.animeDetails.episodes[index].id;
+          SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final episode = episodes[index];
 
-                    return Container(
-                      color: Color(0xFF131D2A),
-                      margin: EdgeInsets.only(bottom: 4.0),
-                      child: Material(
-                        color: Colors.transparent,
-                        elevation: .0,
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.push(
-                                context,
-                                CupertinoPageRoute(
-                                    builder: (context) => VideoWidget(
-                                          episodeId: episodeId,
-                                        )));
-                          },
-                          child: Observer(
-                            builder: (_) {
-                              var isWatched = applicationStore.watchedEpisodeMap
-                                  .containsKey(episodeId);
+                return Container(
+                  color: Color(0xFF131D2A),
+                  margin: EdgeInsets.only(bottom: 4.0),
+                  child: Material(
+                    color: Colors.transparent,
+                    elevation: .0,
+                    child: InkWell(
+                      onTap: () {
+                        Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                                builder: (context) => VideoWidget(
+                                      animeTitle: state.currentAnime.title,
+                                      episodeNumber: episode.number,
+                                      episodes: episodes,
+                                    )));
+                      },
+                      child: BlocBuilder<ApplicationBloc, ApplicationState>(
+                        builder: (context, appState) {
+                          var isWatched = appState.watchedEpisodeMap
+                              .containsKey(episode.id);
 
-                              return ListTile(
-                                leading: Icon(
-                                  Icons.play_circle_outline,
-                                  size: 34.0,
+                          return ListTile(
+                            leading: Icon(
+                              Icons.play_circle_outline,
+                              size: 34.0,
+                              color: (isWatched)
+                                  ? accentColor
+                                  : Colors.grey[300]?.withOpacity(.7),
+                            ),
+                            title: Text(
+                              episode.title ?? 'Episode ${episode.number}',
+                              style: TextStyle(
                                   color: (isWatched)
                                       ? accentColor
-                                      : Colors.grey[300]?.withOpacity(.7),
-                                ),
-                                title: Text(
-                                  detailsStore
-                                      .animeDetails.episodes[index].title,
-                                  style: TextStyle(
-                                      color: (isWatched)
-                                          ? accentColor
-                                          : Colors.white,
-                                      decoration: (isWatched)
-                                          ? TextDecoration.lineThrough
-                                          : TextDecoration.none,
-                                      decorationColor: Colors.white),
-                                ),
-                                trailing: IconButton(
-                                  tooltip: (isWatched)
-                                      ? locale.markAsUnviewed
-                                      : locale.markAsViewed,
-                                  onPressed: () {
-                                    (isWatched)
-                                        ? applicationStore
-                                            .removeWatchedEpisode(episodeId)
-                                        : applicationStore
-                                            .addWatchedEpisode(episodeId);
-                                  },
-                                  icon: Icon(
-                                    (isWatched)
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    color: Colors.white,
-                                  ),
+                                      : Colors.white,
+                                  decoration: (isWatched)
+                                      ? TextDecoration.lineThrough
+                                      : TextDecoration.none,
+                                  decorationColor: Colors.white),
+                            ),
+                            trailing: IconButton(
+                              tooltip: (isWatched)
+                                  ? locale.markAsUnviewed
+                                  : locale.markAsViewed,
+                              onPressed: () {
+                                if (isWatched) {
+                                  context.read<ApplicationBloc>().add(
+                                        EpisodeUnwatched(
+                                            episodeId: episode.id),
+                                      );
+                                } else {
+                                  context.read<ApplicationBloc>().add(
+                                        EpisodeWatched(
+                                            episodeId: episode.id,
+                                            episodeTitle: episode.title,
+                                            viewedAt: DateTime.now().millisecondsSinceEpoch),
+                                      );
+                                }
+                              },
+                              icon: Icon(
+                                (isWatched)
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                color: Colors.white,
+                              ),
                                 ),
                               );
                             },
@@ -306,15 +346,19 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                         ),
                       ),
                     );
-                  },
-                  childCount: detailsStore.animeDetails.episodes.length,
-                )),
+              },
+              childCount: episodes.length,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget buildMoreDetailsSection() {
+  Widget buildMoreDetailsSection(AnimeDetailsLoaded state) {
+    // More details section - now shows info from currentAnime
+    final anime = state.currentAnime;
+
     return SafeArea(
       top: false,
       bottom: false,
@@ -325,10 +369,10 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
           SliverList(
             delegate: SliverChildListDelegate.fixed(
               [
-                buildDetailsSection(detailsStore.animeDetails),
-                buildResumeSection(detailsStore.animeDetails.resume),
-                (detailsStore.shouldLoadSuggestions)
-                    ? buildAnimeSuggestionSection()
+                buildDetailsSection(anime),
+                buildResumeSection(anime.synopsis),
+                (state.relatedAnimes != null)
+                    ? buildAnimeSuggestionSection(state)
                     : Container(),
                 Container(
                   height: 56.0,
@@ -342,13 +386,19 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
   }
 
   void _removeFromList() {
-    applicationStore.removeFromAnimeMap(detailsStore.currentAnimeItem.id);
+    context
+        .read<ApplicationBloc>()
+        .add(MyAnimeRemoved(animeId: widget.anime.id));
     _showNotificationToast(locale.removedFromList, false);
   }
 
   void _addToList() {
-    applicationStore.addToAnimeMap(
-        detailsStore.currentAnimeItem.id, detailsStore.currentAnimeItem);
+    context.read<ApplicationBloc>().add(
+          MyAnimeAdded(
+            animeId: widget.anime.id,
+            anime: widget.anime,
+          ),
+        );
     _showNotificationToast(locale.addedToList, true);
   }
 
@@ -358,8 +408,8 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
         onlyOne: true,
         toastBuilder: (_) {
           return CustomListNotification(
-            imagePath: detailsStore.currentAnimeItem.imageUrl,
-            title: detailsStore.currentAnimeItem.title,
+            imagePath: widget.anime.imageUrl,
+            title: widget.anime.title,
             subtitle: message,
             flag: flag,
           );
@@ -387,16 +437,14 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
         ),
       );
 
-  Widget buildDetailsSection(AnimeDetails data) => Container(
+  Widget buildDetailsSection(AnimeModel anime) => Container(
         margin: EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
         child: Column(
           children: <Widget>[
-            _buildInfoRow('${locale.genre}: ', data.genre),
-            _buildInfoRow('${locale.studio}: ', data.studio),
-            _buildInfoRow('${locale.author}: ', data.author),
-            _buildInfoRow('${locale.director}: ', data.director),
-            _buildInfoRow('${locale.episodes}: ', data.episodesNumber),
-            _buildInfoRow('${locale.year}: ', data.year),
+            _buildInfoRow('${locale.genre}: ', anime.genres.join(', ')),
+            _buildInfoRow('${locale.studio}: ', anime.studios.join(', ')),
+            _buildInfoRow('${locale.episodes}: ', anime.episodeCount?.toString() ?? 'N/A'),
+            _buildInfoRow('${locale.year}: ', anime.releaseYear ?? anime.year?.toString() ?? 'N/A'),
           ],
         ),
       );
@@ -430,7 +478,7 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
         ],
       );
 
-  Widget buildAnimeSuggestionSection() => Container(
+  Widget buildAnimeSuggestionSection(AnimeDetailsLoaded state) => Container(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -443,13 +491,17 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                 style: _defaultSectionStyle,
               ),
             ),
-            Observer(
-              builder: (context) {
-                if (detailsStore.relatedAnimes == null)
+            BlocBuilder<AnimeDetailsBloc, AnimeDetailsState>(
+              builder: (context, detailsState) {
+                if (detailsState is! AnimeDetailsLoaded) {
+                  return Container();
+                }
+
+                if (detailsState.relatedAnimes == null) {
                   return Container(
                       margin: EdgeInsets.symmetric(vertical: 16.0),
                       child: UiUtils.centredDotLoader());
-                else if (detailsStore.relatedAnimes!.isEmpty)
+                } else if (detailsState.relatedAnimes!.isEmpty) {
                   return Row(
                     mainAxisSize: MainAxisSize.max,
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -461,7 +513,7 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                           ))
                     ],
                   );
-                else {
+                } else {
                   var width = MediaQuery.of(context).size.width * .42;
                   var height = width * 1.4;
                   return Container(
@@ -470,7 +522,7 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                     child: ListView.builder(
                       controller: listController,
                       itemBuilder: (context, index) {
-                        var anime = detailsStore.relatedAnimes![index];
+                        var anime = detailsState.relatedAnimes![index];
                         var heroTag = '${anime.id}$_RELATED_TAG';
                         return Padding(
                           padding: EdgeInsets.symmetric(
@@ -484,14 +536,9 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                             onTap: () => Navigator.push(
                               context,
                               CupertinoPageRoute(
-                                builder: (context) =>
-                                    Provider<AnimeDetailsStore>(
-                                  create: (_) => AnimeDetailsStore(
-                                      applicationStore, anime,
-                                      shouldLoadSuggestions: false),
-                                  child: AnimeDetailsScreen(
-                                    heroTag: heroTag,
-                                  ),
+                                builder: (context) => AnimeDetailsScreen(
+                                  heroTag: heroTag,
+                                  anime: anime,
                                 ),
                               ),
                             ),
@@ -499,7 +546,7 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
                         );
                       },
                       scrollDirection: Axis.horizontal,
-                      itemCount: detailsStore.relatedAnimes!.length,
+                      itemCount: detailsState.relatedAnimes!.length,
                       physics: BouncingScrollPhysics(),
                     ),
                   );
@@ -577,7 +624,11 @@ class _AnimeDetailsScreen extends State<AnimeDetailsScreen>
               Container(
                 margin: const EdgeInsets.only(top: 16),
                 child: ElevatedButton.icon(
-                  onPressed: detailsStore.loadAnimeDetails,
+                  onPressed: () {
+                    context.read<AnimeDetailsBloc>().add(
+                          AnimeDetailsLoadRequested(anime: widget.anime),
+                        );
+                  },
                   icon: Icon(
                     Icons.refresh,
                     color: Colors.white,

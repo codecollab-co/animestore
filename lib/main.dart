@@ -3,12 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'package:bot_toast/bot_toast.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:anime_app/logic/stores/StoreUtils.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
-import 'package:anime_app/logic/stores/search_store/SearchStore.dart';
+import 'package:anime_app/data/repositories/anime_repository.dart';
+import 'package:anime_app/data/repositories/user_repository.dart';
+import 'package:anime_app/data/repositories/search_repository.dart';
+import 'package:anime_app/logic/blocs/application/application_bloc.dart';
+import 'package:anime_app/logic/blocs/application/application_event.dart';
+import 'package:anime_app/logic/blocs/application/application_state.dart';
+import 'package:anime_app/logic/blocs/search/search_bloc.dart';
 import 'package:anime_app/ui/pages/MainScreen.dart';
 import 'package:anime_app/ui/pages/RetryPage.dart';
 import 'package:anime_app/ui/pages/SplashScreen.dart';
@@ -26,52 +29,61 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  final ApplicationStore appStore = ApplicationStore();
-
   @override
-  Widget build(BuildContext context) => MultiProvider(
-        providers: [
-          Provider<ApplicationStore>.value(value: appStore),
-          Provider<SearchStore>.value(value: SearchStore(appStore)),
+  Widget build(BuildContext context) {
+    // Initialize repositories
+    final animeRepository = AnimeRepository();
+    final userRepository = UserRepository();
+    final searchRepository = SearchRepository();
+
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ApplicationBloc>(
+          create: (context) => ApplicationBloc(
+            animeRepository: animeRepository,
+            userRepository: userRepository,
+          )..add(const AppInitializeRequested()),
+        ),
+        BlocProvider<SearchBloc>(
+          create: (context) => SearchBloc(
+            searchRepository: searchRepository,
+          ),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'AniStore',
+        builder: BotToastInit(),
+        navigatorObservers: [BotToastNavigatorObserver()],
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData().copyWith(
+          brightness: Brightness.dark,
+          scaffoldBackgroundColor: primaryColor,
+          // text theme
+          textTheme: const TextTheme().copyWith(
+            bodyMedium: const TextStyle(color: textPrimaryColor),
+          ),
+          colorScheme: ColorScheme.fromSwatch().copyWith(secondary: accentColor),
+        ),
+        localizationsDelegates: const [
+          S.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
         ],
-        child: MaterialApp(
-            title: 'AniStore',
-            builder: BotToastInit(),
-            navigatorObservers: [BotToastNavigatorObserver()],
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData().copyWith(
-              brightness: Brightness.dark,
-
-              scaffoldBackgroundColor: primaryColor,
-              // primaryColor: primaryColor,
-
-              // text theme
-              textTheme: TextTheme()
-                  .copyWith(bodyMedium: TextStyle(color: textPrimaryColor)),
-              colorScheme:
-                  ColorScheme.fromSwatch().copyWith(secondary: accentColor),
-            ),
-            localizationsDelegates: [
-              S.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: S.delegate.supportedLocales,
-            home: Observer(builder: (context) {
-              Widget widget;
-              switch (appStore.appInitStatus) {
-                case AppInitStatus.INITIALIZING:
-                  widget = SplashScreen();
-                  break;
-                case AppInitStatus.INITIALIZED:
-                  widget = MainScreen();
-                  break;
-                case AppInitStatus.INIT_ERROR:
-                  widget = RetryPage();
-                  break;
-              }
-              return widget;
-            })),
-      );
+        supportedLocales: S.delegate.supportedLocales,
+        home: BlocBuilder<ApplicationBloc, ApplicationState>(
+          builder: (context, state) {
+            switch (state.initStatus) {
+              case AppInitStatus.initializing:
+                return const SplashScreen();
+              case AppInitStatus.initialized:
+                return const MainScreen();
+              case AppInitStatus.initError:
+                return const RetryPage();
+            }
+          },
+        ),
+      ),
+    );
+  }
 }

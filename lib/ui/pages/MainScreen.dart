@@ -1,30 +1,23 @@
 import 'package:anime_app/generated/l10n.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
 import 'package:anime_app/ui/component/AnimeGridWidget.dart';
 import 'package:anime_app/ui/component/SearchWidget.dart';
 import 'package:anime_app/ui/component/AboutListWidget.dart';
 import 'package:anime_app/ui/pages/HomePage.dart';
 import 'package:anime_app/ui/theme/ColorValues.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 enum MainScreenNavigation { HOME, ANIME_LIST, SEARCH, SETTINGS }
 
 class MainScreen extends StatefulWidget {
+  const MainScreen({Key? key}) : super(key: key);
+
   @override
   _MainScreenState createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
   MainScreenNavigation currentNav = MainScreenNavigation.HOME;
-  late ApplicationStore appStore;
   late S locale;
-
-  @override
-  void initState() {
-    super.initState();
-    appStore = Provider.of<ApplicationStore>(context, listen: false);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,7 +67,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _createBottomBar() => Container(
-        decoration: BoxDecoration(boxShadow: [
+        decoration: const BoxDecoration(boxShadow: [
           BoxShadow(
             color: accentColor,
             offset: Offset(.0, 5.0),
@@ -90,24 +83,24 @@ class _MainScreenState extends State<MainScreen> {
           items: <BottomNavigationBarItem>[
             BottomNavigationBarItem(
               label: locale.home,
-              icon: Icon(
+              icon: const Icon(
                 Icons.home,
               ),
             ),
             BottomNavigationBarItem(
               label: locale.animes,
-              icon: Icon(
+              icon: const Icon(
                 Icons.live_tv,
               ),
             ),
             BottomNavigationBarItem(
               label: locale.search,
-              icon: Icon(
+              icon: const Icon(
                 Icons.search,
               ),
             ),
             BottomNavigationBarItem(
-                label: locale.info, icon: Icon(Icons.info_outline))
+                label: locale.info, icon: const Icon(Icons.info_outline))
           ],
 
           onTap: _changePageBody,

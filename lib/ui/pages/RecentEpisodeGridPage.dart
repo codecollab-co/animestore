@@ -1,12 +1,14 @@
 import 'package:anime_app/generated/l10n.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
+import 'package:anime_app/logic/blocs/application/application_bloc.dart';
+import 'package:anime_app/logic/blocs/application/application_state.dart';
+import 'package:anime_app/models/episode_model.dart';
 import 'package:anime_app/ui/component/app_bar/AnimeStoreHeroAppBar.dart';
 import 'package:anime_app/ui/component/EpisodeItemView.dart';
 import 'package:anime_app/ui/pages/VideoPlayerScreen.dart';
 import 'package:anime_app/ui/utils/HeroTags.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 //
 //return ItemView(
@@ -42,9 +44,7 @@ class RecentEpisodeListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Size size = MediaQuery.of(context).size;
-    var applicationStore = Provider.of<ApplicationStore>(context);
     final locale = S.of(context);
-    var data = applicationStore.latestEpisodes;
 
     return Scaffold(
       body: CustomScrollView(
@@ -54,38 +54,45 @@ class RecentEpisodeListPage extends StatelessWidget {
             title: locale.latestEpisodes,
             heroTag: HeroTags.TAG_LATEST_EPISODES,
           ),
-          SliverPadding(
-            padding: EdgeInsets.symmetric(
-              horizontal: 8.0,
-            ),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  return EpisodeItemView(
-                    width: size.width,
-                    height: size.width / 1.5,
-                    title: data[index].title,
-                    imageUrl: data[index].imageUrl,
-                    fontSize: 18,
-                    fontColor: Colors.white,
-                    onTap: () => _playEpisode(context, data[index].id),
-                  );
-                },
-                childCount: data.length,
-              ),
-            ),
+          BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) {
+              var data = state.latestEpisodes;
+
+              return SliverPadding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                ),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      return EpisodeItemView(
+                        width: size.width,
+                        height: size.width / 1.5,
+                        title: data[index].title ?? 'Episode ${data[index].number}',
+                        imageUrl: data[index].imageUrl ?? '',
+                        fontSize: 18,
+                        fontColor: Colors.white,
+                        onTap: () => _playEpisode(context, data[index]),
+                      );
+                    },
+                    childCount: data.length,
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  void _playEpisode(BuildContext context, String episodeId) {
+  void _playEpisode(BuildContext context, EpisodeModel episode) {
     Navigator.push(
         context,
         CupertinoPageRoute(
             builder: (context) => VideoPlayerScreen(
-                  episodeId: episodeId,
+                  animeTitle: 'Unknown', // TODO: Pass actual anime title
+                  episodeNumber: episode.number,
                 )));
   }
 }

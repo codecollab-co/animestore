@@ -1,6 +1,6 @@
 import 'dart:convert' as json;
 
-import 'package:anitube_crawler_api/anitube_crawler_api.dart';
+import 'package:anime_app/models/anime_model.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:anime_app/model/EpisodeWatched.dart';
@@ -117,10 +117,10 @@ class DatabaseProvider {
 
   Future<int> clearAllMyList() => _db.delete(_TABLE_MY_LIST);
 
-  Future<int> insertAnimeToList(String id, AnimeItem data) async {
+  Future<int> insertAnimeToList(String id, AnimeModel data) async {
     return _db.insert(
       _TABLE_MY_LIST,
-      {_ID: id, _DATA: json.jsonEncode(dataToJson(data))},
+      {_ID: id, _DATA: json.jsonEncode(data.toJson())},
       conflictAlgorithm: ConflictAlgorithm.abort,
     );
   }
@@ -129,16 +129,19 @@ class DatabaseProvider {
     return _db.delete(_TABLE_MY_LIST, where: '$_ID =?', whereArgs: [id]);
   }
 
-  Future<Map<String, AnimeItem>> loadMyAnimeList() async {
+  Future<Map<String, AnimeModel>> loadMyAnimeList() async {
     var list = await _db.query(_TABLE_MY_LIST);
-    Map<String, AnimeItem> dataMap = {};
+    Map<String, AnimeModel> dataMap = {};
 
-    list.forEach((data) => dataMap.putIfAbsent(data[_ID].toString(), () {
-          Map<String, dynamic> map =
-              Map.from(json.jsonDecode(data[_DATA] as String));
-          map[ID] = '${map[ID]}';
-          return AnimeItem.fromJson(map);
-        }));
+    list.forEach((data) {
+      try {
+        final animeData = json.jsonDecode(data[_DATA] as String);
+        final anime = AnimeModel.fromJson(animeData as Map<String, dynamic>);
+        dataMap.putIfAbsent(data[_ID].toString(), () => anime);
+      } catch (e) {
+        print('Error loading anime from database: $e');
+      }
+    });
     return dataMap;
   }
 
@@ -147,20 +150,6 @@ class DatabaseProvider {
     String path = join(databasesPath, _DB_NAME);
     deleteDatabase(path);
   }
-
-  static const ID = "id";
-  static const PAGE_URL = "pageUrl";
-  static const IMAGE_URL = "imageUrl";
-  static const TITLE = "title";
-  static const CC = "closeCaption";
-
-  static Map<String, dynamic> dataToJson(AnimeItem item) => {
-        ID: int.parse(item.id),
-        PAGE_URL: item.pageUrl,
-        IMAGE_URL: item.imageUrl,
-        TITLE: item.title,
-        CC: item.closeCaptionType,
-      };
 
   static const sql1 = 'CREATE TABLE $_TABLE_MY_LIST '
       ' (id INTEGER PRIMARY KEY,'

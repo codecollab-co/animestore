@@ -1,13 +1,15 @@
 import 'package:anime_app/generated/l10n.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
+import 'package:anime_app/logic/blocs/application/application_bloc.dart';
+import 'package:anime_app/logic/blocs/application/application_event.dart';
 import 'package:anime_app/ui/theme/ColorValues.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class RetryPage extends StatelessWidget {
+  const RetryPage({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
-    var appStore = Provider.of<ApplicationStore>(context);
     var size = MediaQuery.of(context).size;
     final defaultMargin = 10.0;
     final S locale = S.of(context);
@@ -38,7 +40,7 @@ class RetryPage extends StatelessWidget {
                   maxLines: 4,
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 22,
                   ),
                 ),
@@ -46,14 +48,16 @@ class RetryPage extends StatelessWidget {
               Container(
                 margin: EdgeInsets.only(top: defaultMargin),
                 child: ElevatedButton.icon(
-                  onPressed: appStore.appRetry,
-                  icon: Icon(
+                  onPressed: () {
+                    context.read<ApplicationBloc>().add(const AppRetryRequested());
+                  },
+                  icon: const Icon(
                     Icons.refresh,
                     color: Colors.green,
                   ),
                   label: Text(
                     locale.tryAgain,
-                    style: TextStyle(color: Colors.black87),
+                    style: const TextStyle(color: Colors.black87),
                   ),
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
                 ),

@@ -1,18 +1,15 @@
-import 'package:anime_app/logic/stores/anime_details_store/AnimeDetailsStore.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
+import 'package:anime_app/models/anime_model.dart';
 import 'package:anime_app/ui/component/app_bar/AnimeStoreHeroAppBar.dart';
 import 'package:anime_app/ui/component/ItemView.dart';
 import 'package:anime_app/ui/component/SliverGridViewWidget.dart';
 import 'package:anime_app/ui/pages/AnimeDetailsScreen.dart';
-import 'package:anitube_crawler_api/anitube_crawler_api.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 typedef OnTap = void Function();
 
 class DefaultAnimeItemGridPage extends StatelessWidget {
-  final List<AnimeItem> gridItems;
+  final List<AnimeModel> gridItems;
   final String title;
   final String? heroTag;
   final List<Widget>? actions;
@@ -57,14 +54,9 @@ class DefaultAnimeItemGridPage extends StatelessWidget {
                       Navigator.push(
                           context,
                           CupertinoPageRoute(
-                            builder: (context) => Provider<AnimeDetailsStore>(
-                              create: (_) => AnimeDetailsStore(
-                                Provider.of<ApplicationStore>(context),
-                                gridItems[index],
-                              ),
-                              child: AnimeDetailsScreen(
-                                heroTag: gridItems[index].id,
-                              ),
+                            builder: (context) => AnimeDetailsScreen(
+                              heroTag: gridItems[index].id,
+                              anime: gridItems[index],
                             ),
                           ));
                     },

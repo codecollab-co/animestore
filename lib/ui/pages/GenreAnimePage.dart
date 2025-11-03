@@ -1,50 +1,63 @@
-import 'package:anime_app/logic/stores/StoreUtils.dart';
-import 'package:anime_app/logic/stores/anime_details_store/AnimeDetailsStore.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
-import 'package:anime_app/logic/stores/genre_anime_store/GenreAnimeStore.dart';
+import 'package:anime_app/data/repositories/genre_repository.dart';
+import 'package:anime_app/logic/blocs/genre/genre_bloc.dart';
+import 'package:anime_app/logic/blocs/genre/genre_event.dart';
+import 'package:anime_app/logic/blocs/genre/genre_state.dart';
 import 'package:anime_app/ui/component/ItemView.dart';
 import 'package:anime_app/ui/component/SliverGridViewWidget.dart';
 import 'package:anime_app/ui/pages/AnimeDetailsScreen.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:anime_app/ui/utils/UiUtils.dart';
 
-class GenreAnimePage extends StatefulWidget {
+class GenreAnimePage extends StatelessWidget {
   final String genreName;
 
   const GenreAnimePage({Key? key, required this.genreName}) : super(key: key);
 
   @override
-  State<StatefulWidget> createState() => _GenreAnimePageState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => GenreBloc(
+        genreRepository: GenreRepository(),
+      )..add(GenreAnimeLoadRequested(genre: genreName)),
+      child: _GenreAnimeContent(genreName: genreName),
+    );
+  }
 }
 
-class _GenreAnimePageState extends State<GenreAnimePage> {
+class _GenreAnimeContent extends StatefulWidget {
+  final String genreName;
+
+  const _GenreAnimeContent({Key? key, required this.genreName})
+      : super(key: key);
+
+  @override
+  State<StatefulWidget> createState() => _GenreAnimeContentState();
+}
+
+class _GenreAnimeContentState extends State<_GenreAnimeContent> {
   final ScrollController _controller = ScrollController();
-  late ApplicationStore appStore;
-  late GenreAnimeStore store;
 
   @override
   void initState() {
     super.initState();
-    appStore = Provider.of<ApplicationStore>(context, listen: false);
-    store = GenreAnimeStore(appStore, widget.genreName);
-    store.init();
     _controller.addListener(_listener);
   }
 
   @override
   void dispose() {
-    super.dispose();
     _controller.removeListener(_listener);
+    _controller.dispose();
+    super.dispose();
   }
 
-  void _listener() async {
+  void _listener() {
     if (_controller.position.pixels >
         (_controller.position.maxScrollExtent -
-            (_controller.position.maxScrollExtent / 4)))
-      return await store.loadMore();
+            (_controller.position.maxScrollExtent / 4))) {
+      context.read<GenreBloc>().add(const GenreAnimeLoadMoreRequested());
+    }
   }
 
   @override
@@ -57,67 +70,81 @@ class _GenreAnimePageState extends State<GenreAnimePage> {
     return Scaffold(
       body: CustomScrollView(
         controller: _controller,
-        physics: BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         slivers: <Widget>[
-          SliverToBoxAdapter(
-            child: Container(),
+          const SliverToBoxAdapter(
+            child: SizedBox.shrink(),
           ),
-          Observer(
-            builder: (_) => (store.loadingStatus == LoadingStatus.LOADING)
-                ? SliverToBoxAdapter(
-                    child: Container(
-                      height: size.height,
-                      width: size.width,
-                      child: UiUtils.centredDotLoader(),
-                    ),
-                  )
-                : (store.loadingStatus == LoadingStatus.ERROR)
-                    ? SliverToBoxAdapter(
-                        child: Center(
-                          child: Text('ERROR'),
-                        ),
-                      )
-                    : Observer(
-                        builder: (_) => SliverGridItemView(
-                          childAspectRatio: (itemWidth / itemHeight),
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              var anime = store.animeItems[index];
-                              var heroTag = '${anime.id}-$index';
+          BlocBuilder<GenreBloc, GenreState>(
+            builder: (context, state) {
+              if (state is GenreLoading) {
+                return SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: size.height,
+                    width: size.width,
+                    child: UiUtils.centredDotLoader(),
+                  ),
+                );
+              }
 
-                              return Tooltip(
-                                message: anime.title,
-                                child: ItemView(
-                                  imageHeroTag: heroTag,
-                                  width: itemWidth,
-                                  height: itemHeight,
-                                  imageUrl: anime.imageUrl,
-                                  onTap: () {
-                                    Navigator.push(
-                                        context,
-                                        CupertinoPageRoute(
-                                          builder: (context) =>
-                                              Provider<AnimeDetailsStore>(
-                                            create: (_) => AnimeDetailsStore(
-                                                appStore, anime),
-                                            child: AnimeDetailsScreen(
-                                              heroTag: heroTag,
-                                            ),
-                                          ),
-                                        ));
-                                  },
+              if (state is GenreError) {
+                return SliverToBoxAdapter(
+                  child: Center(
+                    child: Text('ERROR: ${state.errorMessage}'),
+                  ),
+                );
+              }
+
+              if (state is GenreLoaded) {
+                return SliverGridItemView(
+                  childAspectRatio: (itemWidth / itemHeight),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      var anime = state.animeItems[index];
+                      var heroTag = '${anime.id}-$index';
+
+                      return Tooltip(
+                        message: anime.title,
+                        child: ItemView(
+                          imageHeroTag: heroTag,
+                          width: itemWidth,
+                          height: itemHeight,
+                          imageUrl: anime.imageUrl,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              CupertinoPageRoute(
+                                builder: (context) => AnimeDetailsScreen(
+                                  heroTag: heroTag,
+                                  anime: anime,
                                 ),
-                              );
-                            },
-                            childCount: store.animeItems.length,
-                          ),
+                              ),
+                            );
+                          },
                         ),
-                      ),
+                      );
+                    },
+                    childCount: state.animeItems.length,
+                  ),
+                );
+              }
+
+              return const SliverToBoxAdapter(
+                child: SizedBox.shrink(),
+              );
+            },
           ),
-          Observer(
-            builder: (_) => SliverToBoxAdapter(
-              child: (store.isLoadingMore) ? _loadingWidget() : Container(),
-            ),
+          BlocBuilder<GenreBloc, GenreState>(
+            builder: (context, state) {
+              if (state is GenreLoaded && state.isLoadingMore) {
+                return SliverToBoxAdapter(
+                  child: _loadingWidget(),
+                );
+              }
+              return const SliverToBoxAdapter(
+                child: SizedBox.shrink(),
+              );
+            },
           ),
         ],
       ),
@@ -125,7 +152,7 @@ class _GenreAnimePageState extends State<GenreAnimePage> {
   }
 
   Widget _loadingWidget() => Container(
-        margin: EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+        margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
         child: UiUtils.centredDotLoader(),
       );
 }

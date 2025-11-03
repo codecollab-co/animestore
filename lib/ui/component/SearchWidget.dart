@@ -1,15 +1,14 @@
 import 'package:anime_app/generated/l10n.dart';
-import 'package:anime_app/logic/stores/anime_details_store/AnimeDetailsStore.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
-import 'package:anime_app/logic/stores/search_store/SearchStore.dart';
+import 'package:anime_app/logic/blocs/search/search_bloc.dart';
+import 'package:anime_app/logic/blocs/search/search_event.dart';
+import 'package:anime_app/logic/blocs/search/search_state.dart';
+import 'package:anime_app/models/anime_model.dart';
 import 'package:anime_app/ui/component/ItemView.dart';
 import 'package:anime_app/ui/pages/AnimeDetailsScreen.dart';
 import 'package:anime_app/ui/theme/ColorValues.dart';
-import 'package:anitube_crawler_api/anitube_crawler_api.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../utils/UiUtils.dart';
 
 class SearchWidget extends StatefulWidget {
@@ -21,15 +20,13 @@ class _SearchWidgetState extends State<SearchWidget> {
   late ScrollController _controller;
   final TextEditingController _searchController =
       TextEditingController(text: '');
-  late SearchStore searchStore;
   late S locale;
+  double _searchListOffset = 0.0;
 
   @override
   void initState() {
     super.initState();
-    searchStore = Provider.of<SearchStore>(context, listen: false);
-    _controller =
-        ScrollController(initialScrollOffset: searchStore.searchListOffset);
+    _controller = ScrollController(initialScrollOffset: _searchListOffset);
     _controller.addListener(_pagination);
   }
 
@@ -48,40 +45,49 @@ class _SearchWidgetState extends State<SearchWidget> {
       backgroundColor: primaryColor,
       expandedHeight: kToolbarHeight,
       title: Center(
-        child: Observer(builder: (context) {
-          _searchController.text = searchStore.currentQuery;
+        child: BlocBuilder<SearchBloc, SearchState>(
+          builder: (context, state) {
+            // Only set text if state has currentQuery property
+            if (state is SearchSuccess) {
+              _searchController.text = state.currentQuery;
+            }
 
-          return Container(
-            width: size.width,
-            height: kToolbarHeight - 16,
-            child: TextField(
-              autofocus: false,
-              style: TextStyle(
-                color: primaryColor,
+            return Container(
+              width: size.width,
+              height: kToolbarHeight - 16,
+              child: TextField(
+                autofocus: false,
+                style: TextStyle(
+                  color: primaryColor,
+                ),
+                enabled: state is! SearchInProgress,
+                controller: _searchController,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) {
+                  if (_searchController.text.isNotEmpty) {
+                    context.read<SearchBloc>().add(
+                          SearchQuerySubmitted(query: _searchController.text),
+                        );
+                  }
+                },
+                decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(50.0),
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(Icons.clear),
+                      onPressed: () =>
+                          context.read<SearchBloc>().add(const SearchCleared()),
+                    ),
+                    hintText: locale.searchHint,
+                    hintStyle: TextStyle(color: secondaryColor),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 16.0)),
               ),
-              enabled: (searchStore.searchState != SearchState.SEARCHING),
-              controller: _searchController,
-              textInputAction: TextInputAction.done,
-              onSubmitted: (_) {
-                if (_searchController.text.isNotEmpty)
-                  searchStore.search(_searchController.text);
-              },
-              decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(50.0),
-                  ),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.clear),
-                    onPressed: () => searchStore.clearSearch(),
-                  ),
-                  hintText: locale.searchHint,
-                  hintStyle: TextStyle(color: secondaryColor),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 16.0)),
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ),
       snap: false,
       floating: true,
@@ -93,53 +99,50 @@ class _SearchWidgetState extends State<SearchWidget> {
       physics: BouncingScrollPhysics(),
       slivers: <Widget>[
         appBar,
-        Observer(
-          builder: (context) {
+        BlocBuilder<SearchBloc, SearchState>(
+          builder: (context, state) {
             Widget widget;
 
-            switch (searchStore.searchState) {
-              case SearchState.SEARCHING:
-                widget = SliverToBoxAdapter(
-                  child: Container(
-                    height: size.height * .7,
-                    child: UiUtils.centredDotLoader(),
-                  ),
-                );
-                break;
-
-              case SearchState.DONE:
-                if (searchStore.searchItemList.isEmpty)
-                  widget = _centerDecoration(
-                      size, Icons.sentiment_dissatisfied, locale.noResults);
-                else
-                  widget = _buildGrid(searchStore.searchItemList, size);
-                break;
-
-              case SearchState.NONE:
-                widget =
-                    _centerDecoration(size, Icons.search, '${locale.search}');
-                break;
-              case SearchState.ERROR:
-                widget = _centerDecoration(size, Icons.error, locale.searchErrorMessage);
-                break;
+            if (state is SearchInProgress) {
+              widget = SliverToBoxAdapter(
+                child: Container(
+                  height: size.height * .7,
+                  child: UiUtils.centredDotLoader(),
+                ),
+              );
+            } else if (state is SearchSuccess) {
+              if (state.results.isEmpty) {
+                widget = _centerDecoration(
+                    size, Icons.sentiment_dissatisfied, locale.noResults);
+              } else {
+                widget = _buildGrid(state.results, size);
+              }
+            } else if (state is SearchInitial) {
+              widget = _centerDecoration(size, Icons.search, '${locale.search}');
+            } else if (state is SearchError) {
+              widget = _centerDecoration(size, Icons.error, locale.searchErrorMessage);
+            } else {
+              widget = _centerDecoration(size, Icons.search, '${locale.search}');
             }
+
             return widget;
           },
         ),
         SliverToBoxAdapter(
-          child: Observer(
-              builder: (context) => (searchStore.isLoadingMore)
-                  ? Row(
-                      mainAxisSize: MainAxisSize.max,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        Container(
-                          margin: EdgeInsets.all(8.0),
-                          child: UiUtils.centredDotLoader(),
-                        ),
-                      ],
-                    )
-                  : Container()),
+          child: BlocBuilder<SearchBloc, SearchState>(
+            builder: (context, state) => (state is SearchSuccess && state.isLoadingMore)
+                ? Row(
+                    mainAxisSize: MainAxisSize.max,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: <Widget>[
+                      Container(
+                        margin: EdgeInsets.all(8.0),
+                        child: UiUtils.centredDotLoader(),
+                      ),
+                    ],
+                  )
+                : Container(),
+          ),
         ),
       ],
     );
@@ -174,7 +177,7 @@ class _SearchWidgetState extends State<SearchWidget> {
         ),
       );
 
-  Widget _buildGrid(List<AnimeItem> items, Size size) {
+  Widget _buildGrid(List<AnimeModel> items, Size size) {
     final double itemHeight = (size.height - kToolbarHeight - 24) / 2.5;
     final double itemWidth = size.width / 2;
     return SliverPadding(
@@ -198,14 +201,9 @@ class _SearchWidgetState extends State<SearchWidget> {
                 Navigator.push(
                   context,
                   CupertinoPageRoute(
-                    builder: (context) => Provider<AnimeDetailsStore>(
-                      create: (_) => AnimeDetailsStore(
-                        Provider.of<ApplicationStore>(context),
-                        items[index],
-                      ),
-                      child: AnimeDetailsScreen(
-                        heroTag: items[index].id,
-                      ),
+                    builder: (context) => AnimeDetailsScreen(
+                      heroTag: items[index].id,
+                      anime: items[index],
                     ),
                   ),
                 );
@@ -219,11 +217,11 @@ class _SearchWidgetState extends State<SearchWidget> {
   }
 
   void _pagination() async {
-    searchStore.searchListOffset = _controller.position.pixels;
+    _searchListOffset = _controller.position.pixels;
     if (_controller.position.pixels >
         (_controller.position.maxScrollExtent -
             (_controller.position.maxScrollExtent / 4))) {
-      await searchStore.loadMore();
+      context.read<SearchBloc>().add(const SearchLoadMoreRequested());
     }
   }
 }

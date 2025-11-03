@@ -1,13 +1,12 @@
-import 'package:anime_app/logic/stores/StoreUtils.dart';
-import 'package:anime_app/logic/stores/anime_details_store/AnimeDetailsStore.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
+import 'package:anime_app/logic/blocs/application/application_bloc.dart';
+import 'package:anime_app/logic/blocs/application/application_event.dart';
+import 'package:anime_app/logic/blocs/application/application_state.dart';
 import 'package:anime_app/ui/component/ItemView.dart';
 import 'package:anime_app/ui/component/SliverGridViewWidget.dart';
 import 'package:anime_app/ui/pages/AnimeDetailsScreen.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../utils/UiUtils.dart';
 
 class AnimeGridWidget extends StatefulWidget {
@@ -16,26 +15,24 @@ class AnimeGridWidget extends StatefulWidget {
 }
 
 class _AnimeGridWidgetState extends State<AnimeGridWidget> {
-  late ApplicationStore appStore;
+  late ApplicationBloc appBloc;
 
   late ScrollController _controller;
 
   @override
   void initState() {
     super.initState();
-    appStore = Provider.of<ApplicationStore>(context, listen: false);
-    _controller =
-        ScrollController(initialScrollOffset: appStore.mainAnimeListOffset);
+    appBloc = context.read<ApplicationBloc>();
+    _controller = ScrollController();
     _controller.addListener(_listener);
   }
 
-  void _listener() async {
-    appStore.mainAnimeListOffset = _controller.position.pixels;
-
+  void _listener() {
     if (_controller.position.pixels >
         (_controller.position.maxScrollExtent -
-            (_controller.position.maxScrollExtent / 4)))
-      await appStore.loadAnimeList();
+            (_controller.position.maxScrollExtent / 4))) {
+      context.read<ApplicationBloc>().add(const AnimeListLoadRequested());
+    }
   }
 
   @override
@@ -51,45 +48,42 @@ class _AnimeGridWidgetState extends State<AnimeGridWidget> {
       physics: BouncingScrollPhysics(),
       slivers: <Widget>[
         // appBar,
-        Observer(builder: (context) {
-          return SliverGridItemView(
-            childAspectRatio: (itemWidth / itemHeight),
-            delegate: SliverChildBuilderDelegate(
-              (context, index) {
-                return Tooltip(
-                  message: appStore.feedAnimeList[index].title,
-                  child: ItemView(
-                    width: itemWidth,
-                    height: itemHeight,
-                    imageUrl: appStore.feedAnimeList[index].imageUrl,
-                    imageHeroTag: appStore.feedAnimeList[index].id,
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          CupertinoPageRoute(
-                            builder: (context) => Provider<AnimeDetailsStore>(
-                              create: (_) => AnimeDetailsStore(
-                                Provider.of<ApplicationStore>(context),
-                                appStore.feedAnimeList[index],
+        BlocBuilder<ApplicationBloc, ApplicationState>(
+          builder: (context, state) {
+            return SliverGridItemView(
+              childAspectRatio: (itemWidth / itemHeight),
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  return Tooltip(
+                    message: state.feedAnimeList[index].title,
+                    child: ItemView(
+                      width: itemWidth,
+                      height: itemHeight,
+                      imageUrl: state.feedAnimeList[index].imageUrl,
+                      imageHeroTag: state.feedAnimeList[index].id,
+                      onTap: () {
+                        Navigator.push(
+                            context,
+                            CupertinoPageRoute(
+                              builder: (context) => AnimeDetailsScreen(
+                                heroTag: state.feedAnimeList[index].id,
+                                anime: state.feedAnimeList[index],
                               ),
-                              child: AnimeDetailsScreen(
-                                heroTag: appStore.feedAnimeList[index].id,
-                              ),
-                            ),
-                          ));
-                    },
-                  ),
-                );
-              },
-              childCount: appStore.feedAnimeList.length,
-            ),
-          );
-        }),
+                            ));
+                      },
+                    ),
+                  );
+                },
+                childCount: state.feedAnimeList.length,
+              ),
+            );
+          },
+        ),
 
         SliverToBoxAdapter(
-          child: Observer(
-            builder: (_) =>
-                (appStore.animeListLoadingStatus == LoadingStatus.LOADING)
+          child: BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) =>
+                (state.animeListLoadingStatus == LoadingStatus.loading)
                     ? Row(
                         mainAxisSize: MainAxisSize.max,
                         mainAxisAlignment: MainAxisAlignment.center,

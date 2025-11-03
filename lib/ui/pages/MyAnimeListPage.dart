@@ -1,6 +1,7 @@
 import 'package:anime_app/generated/l10n.dart';
-import 'package:anime_app/logic/stores/anime_details_store/AnimeDetailsStore.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
+import 'package:anime_app/logic/blocs/application/application_bloc.dart';
+import 'package:anime_app/logic/blocs/application/application_event.dart';
+import 'package:anime_app/logic/blocs/application/application_state.dart';
 import 'package:anime_app/ui/component/app_bar/AnimeStoreHeroAppBar.dart';
 import 'package:anime_app/ui/component/ItemView.dart';
 import 'package:anime_app/ui/component/SliverGridViewWidget.dart';
@@ -8,8 +9,7 @@ import 'package:anime_app/ui/component/dialog/AnimeStoreAcceptDialog.dart';
 import 'package:anime_app/ui/pages/AnimeDetailsScreen.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class MyAnimeListPage extends StatelessWidget {
   final String? heroTag;
@@ -23,7 +23,7 @@ class MyAnimeListPage extends StatelessWidget {
   Widget build(BuildContext context) {
     var size = MediaQuery.of(context).size;
     final locale = S.of(context);
-    final appStore = Provider.of<ApplicationStore>(context, listen: false);
+    final appBloc = context.read<ApplicationBloc>();
 
     /*24 is for notification bar on Android*/
     final double itemHeight = (size.height - kToolbarHeight - 24) / 2.5;
@@ -38,7 +38,7 @@ class MyAnimeListPage extends StatelessWidget {
                     title: locale.titleClearList,
                     bodyMessage: locale.messageClearList,
                     onConfirm: () {
-                      appStore.clearMyList();
+                      appBloc.add(const MyAnimeListCleared());
                       Navigator.popUntil(
                           context, (Route<dynamic> route) => route.isFirst);
                     },
@@ -58,42 +58,39 @@ class MyAnimeListPage extends StatelessWidget {
             heroTag: heroTag,
             actions: appBarActions,
           ),
-          Observer(builder: (context) {
-            var animeList = appStore.myAnimeMap.values.toList();
+          BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) {
+              var animeList = state.myAnimeMap.values.toList();
 
-            return SliverGridItemView(
-              childAspectRatio: (itemWidth / itemHeight),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  return Tooltip(
-                    message: animeList[index].title,
-                    child: ItemView(
-                      width: itemWidth,
-                      height: itemHeight,
-                      imageUrl: animeList[index].imageUrl,
-                      imageHeroTag: animeList[index].id,
-                      onTap: () {
-                        Navigator.push(
-                            context,
-                            CupertinoPageRoute(
-                              builder: (context) => Provider<AnimeDetailsStore>(
-                                create: (_) => AnimeDetailsStore(
-                                  appStore,
-                                  animeList[index],
-                                ),
-                                child: AnimeDetailsScreen(
+              return SliverGridItemView(
+                childAspectRatio: (itemWidth / itemHeight),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    return Tooltip(
+                      message: animeList[index].title,
+                      child: ItemView(
+                        width: itemWidth,
+                        height: itemHeight,
+                        imageUrl: animeList[index].imageUrl,
+                        imageHeroTag: animeList[index].id,
+                        onTap: () {
+                          Navigator.push(
+                              context,
+                              CupertinoPageRoute(
+                                builder: (context) => AnimeDetailsScreen(
                                   heroTag: animeList[index].id,
+                                  anime: animeList[index],
                                 ),
-                              ),
-                            ));
-                      },
-                    ),
-                  );
-                },
-                childCount: animeList.length,
-              ),
-            );
-          }),
+                              ));
+                        },
+                      ),
+                    );
+                  },
+                  childCount: animeList.length,
+                ),
+              );
+            },
+          ),
         ],
       ),
     );

@@ -1,7 +1,8 @@
 import 'package:anime_app/generated/l10n.dart';
 import 'package:anime_app/logic/Constants.dart';
-import 'package:anime_app/logic/stores/anime_details_store/AnimeDetailsStore.dart';
-import 'package:anime_app/logic/stores/application/ApplicationStore.dart';
+import 'package:anime_app/logic/blocs/application/application_bloc.dart';
+import 'package:anime_app/logic/blocs/application/application_event.dart';
+import 'package:anime_app/logic/blocs/application/application_state.dart';
 import 'package:anime_app/ui/component/EpisodeItemView.dart';
 import 'package:anime_app/ui/component/ItemView.dart';
 import 'package:anime_app/ui/component/TapableText.dart';
@@ -15,16 +16,16 @@ import 'package:anime_app/ui/pages/RecentEpisodeGridPage.dart';
 import 'package:anime_app/ui/pages/VideoPlayerScreen.dart';
 import 'package:anime_app/ui/theme/ColorValues.dart';
 import 'package:anime_app/ui/utils/HeroTags.dart';
-import 'package:anitube_crawler_api/anitube_crawler_api.dart';
+import 'package:anime_app/models/anime_model.dart';
+import 'package:anime_app/models/episode_model.dart';
 import 'package:carousel_pro_nullsafety/carousel_pro_nullsafety.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_mobx/flutter_mobx.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:random_color/random_color.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({
+  HomePage({
     Key? key,
   }) : super(key: key);
 
@@ -39,7 +40,7 @@ class _HomePageState extends State<HomePage>
     fontSize: 18,
   );
 
-  late ApplicationStore appStore;
+  bool _isFirstHomePageView = true;
   late AnimationController controller;
   late Animation<Offset> carouselAnimation;
   late Animation<Offset> headerAnimation;
@@ -49,8 +50,7 @@ class _HomePageState extends State<HomePage>
   @override
   void initState() {
     super.initState();
-    appStore = Provider.of<ApplicationStore>(context, listen: false);
-    if (appStore.isFirstHomePageView) {
+    if (_isFirstHomePageView) {
       controller = AnimationController(
         vsync: this,
         duration: Duration(milliseconds: 1000),
@@ -70,7 +70,7 @@ class _HomePageState extends State<HomePage>
 
   @override
   void dispose() {
-    appStore.isFirstHomePageView = false;
+    _isFirstHomePageView = false;
     controller.dispose();
     super.dispose();
   }
@@ -81,26 +81,13 @@ class _HomePageState extends State<HomePage>
 
     final S locale = S.of(context);
 
-    final ScrollController topAnimesController =
-        ScrollController(initialScrollOffset: appStore.topAnimeOffset);
-    topAnimesController.addListener(
-        () => appStore.topAnimeOffset = topAnimesController.position.pixels);
+    final ScrollController topAnimesController = ScrollController();
 
-    final ScrollController mostRecentController =
-        ScrollController(initialScrollOffset: appStore.mostRecentOffset);
-    mostRecentController.addListener(
-        () => appStore.mostRecentOffset = mostRecentController.position.pixels);
+    final ScrollController mostRecentController = ScrollController();
 
-    final ScrollController genresController =
-        ScrollController(initialScrollOffset: appStore.genreListOffset);
-    genresController.addListener(
-        () => appStore.genreListOffset = genresController.position.pixels);
+    final ScrollController genresController = ScrollController();
 
-    final ScrollController myListController = ScrollController(
-      initialScrollOffset: appStore.myListOffset,
-    );
-    myListController.addListener(
-        () => appStore.myListOffset = myListController.position.pixels);
+    final ScrollController myListController = ScrollController();
 
     final expandedHeight = size.width * .9;
 
@@ -108,7 +95,6 @@ class _HomePageState extends State<HomePage>
       context: context,
       width: size.width,
       height: expandedHeight,
-      appStore: appStore,
     );
 
     final appBar = SliverAppBar(
@@ -121,7 +107,7 @@ class _HomePageState extends State<HomePage>
       backgroundColor: primaryColor.withOpacity(.9),
       //title: Text('AppBar', style: TextStyle(color: Colors.black),),
       flexibleSpace: FlexibleSpaceBar(
-          background: (appStore.isFirstHomePageView)
+          background: (_isFirstHomePageView)
               ? SlideTransition(
                   position: carouselAnimation,
                   child: carousel,
@@ -129,16 +115,20 @@ class _HomePageState extends State<HomePage>
               : carousel),
     );
 
-    final topAnimesHeader = _createHeaderSection(
-      context,
-      locale: locale,
-      title: '${locale.topAnimes}',
-      iconData: Icons.star,
-      iconColor: Colors.amberAccent,
-      heroTag: HeroTags.TAG_TOP_ANIMES,
-      onTap: () {
-        _openAnimeItemGridPage(context, appStore.topAnimeList, 'Top Animes',
-            HeroTags.TAG_TOP_ANIMES);
+    final topAnimesHeader = BlocBuilder<ApplicationBloc, ApplicationState>(
+      builder: (context, state) {
+        return _createHeaderSection(
+          context,
+          locale: locale,
+          title: '${locale.topAnimes}',
+          iconData: Icons.star,
+          iconColor: Colors.amberAccent,
+          heroTag: HeroTags.TAG_TOP_ANIMES,
+          onTap: () {
+            _openAnimeItemGridPage(context, state.topAnimeList, 'Top Animes',
+                HeroTags.TAG_TOP_ANIMES);
+          },
+        );
       },
     );
 
@@ -157,8 +147,8 @@ class _HomePageState extends State<HomePage>
       },
     );
 
-    final myListHeader = Observer(
-      builder: (context) => (appStore.myAnimeMap.isEmpty)
+    final myListHeader = BlocBuilder<ApplicationBloc, ApplicationState>(
+      builder: (context, state) => (state.myAnimeMap.isEmpty)
           ? SliverToBoxAdapter(
               child: Container(),
             )
@@ -180,19 +170,23 @@ class _HomePageState extends State<HomePage>
             ),
     );
 
-    final mostRecentsHeader = _createHeaderSection(
-      context,
-      locale: locale,
-      iconData: Icons.update,
-      iconColor: accentColor,
-      title: locale.recentlyUpdated,
-      heroTag: HeroTags.TAG_RECENTLY_UPLOADED,
-      onTap: () => _openAnimeItemGridPage(
-        context,
-        appStore.mostRecentAnimeList,
-        locale.recentlyUpdated,
-        HeroTags.TAG_RECENTLY_UPLOADED,
-      ),
+    final mostRecentsHeader = BlocBuilder<ApplicationBloc, ApplicationState>(
+      builder: (context, state) {
+        return _createHeaderSection(
+          context,
+          locale: locale,
+          iconData: Icons.update,
+          iconColor: accentColor,
+          title: locale.recentlyUpdated,
+          heroTag: HeroTags.TAG_RECENTLY_UPLOADED,
+          onTap: () => _openAnimeItemGridPage(
+            context,
+            state.mostRecentAnimeList,
+            locale.recentlyUpdated,
+            HeroTags.TAG_RECENTLY_UPLOADED,
+          ),
+        );
+      },
     );
 
     final latestEpisodesHeader = _createHeaderSection(
@@ -207,7 +201,10 @@ class _HomePageState extends State<HomePage>
 
     return RefreshIndicator(
       key: refreshIndicatorKey,
-      onRefresh: () => appStore.refreshHome(),
+      onRefresh: () async {
+        context.read<ApplicationBloc>().add(const HomePageRefreshRequested());
+        await Future.delayed(Duration(seconds: 1));
+      },
       color: accentColor,
       backgroundColor: primaryColor,
       child: CustomScrollView(
@@ -215,44 +212,59 @@ class _HomePageState extends State<HomePage>
         slivers: <Widget>[
           appBar,
           topAnimesHeader,
-          _createHorizontaAnimelList(
-            appStore,
-            data: appStore.topAnimeList,
-            width: size.width * .42,
-            tag: HeroTags.TAG_TOP_ANIMES,
-            controller: topAnimesController,
+          BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) {
+              return _createHorizontaAnimelList(
+                data: state.topAnimeList,
+                width: size.width * .42,
+                tag: HeroTags.TAG_TOP_ANIMES,
+                controller: topAnimesController,
+              );
+            },
           ),
           mostRecentsHeader,
-          _createHorizontaAnimelList(appStore,
-              data: appStore.mostRecentAnimeList,
-              width: size.width * .42,
-              tag: heroTagRelease,
-              controller: mostRecentController),
+          BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) {
+              return _createHorizontaAnimelList(
+                data: state.mostRecentAnimeList,
+                width: size.width * .42,
+                tag: heroTagRelease,
+                controller: mostRecentController,
+              );
+            },
+          ),
           genresHeader,
-          _createHorizontalGenreList(
-            width: size.width * .42,
-            data: appStore.genreList,
-            controller: genresController,
+          BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) {
+              return _createHorizontalGenreList(
+                width: size.width * .42,
+                data: state.genreList,
+                controller: genresController,
+              );
+            },
           ),
           myListHeader,
-          Observer(
-            builder: (context) => (appStore.myAnimeMap.isEmpty)
+          BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) => (state.myAnimeMap.isEmpty)
                 ? SliverToBoxAdapter(
                     child: Container(),
                   )
                 : _createHorizontaCustomAnimelList(
-                    appStore,
                     width: size.width * .42,
                     tag: heroTagMyList,
                     controller: myListController,
                   ),
           ),
           latestEpisodesHeader,
-          _createHorizontalEpisodeList(
-            context,
-            data: appStore.latestEpisodes,
-            width: size.width * .42,
-          )
+          BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) {
+              return _createHorizontalEpisodeList(
+                context,
+                data: state.latestEpisodes,
+                width: size.width * .42,
+              );
+            },
+          ),
         ],
       ),
     );
@@ -296,7 +308,7 @@ class _HomePageState extends State<HomePage>
       padding:
           EdgeInsets.only(bottom: 24.0, top: 24.0, left: 16.0, right: 12.0),
       sliver: SliverToBoxAdapter(
-          child: (appStore.isFirstHomePageView)
+          child: (_isFirstHomePageView)
               ? SlideTransition(
                   position: headerAnimation,
                   child: layout,
@@ -305,8 +317,8 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  SliverToBoxAdapter _createHorizontaAnimelList(ApplicationStore appStore,
-      {required List<AnimeItem> data,
+  SliverToBoxAdapter _createHorizontaAnimelList(
+      {required List<AnimeModel> data,
       required double width,
       String? tag,
       required ScrollController controller}) {
@@ -324,8 +336,7 @@ class _HomePageState extends State<HomePage>
             height: width * 1.4,
             imageUrl: anime.imageUrl,
             imageHeroTag: heroTag,
-            onTap: () =>
-                _openAnimeDetailsPage(context, anime, heroTag, appStore),
+            onTap: () => _openAnimeDetailsPage(context, anime, heroTag),
           ),
         );
       },
@@ -337,7 +348,7 @@ class _HomePageState extends State<HomePage>
     return SliverToBoxAdapter(
       child: Container(
           height: width * 1.4,
-          child: (appStore.isFirstHomePageView)
+          child: (_isFirstHomePageView)
               ? SlideTransition(
                   position: carouselAnimation,
                   child: listWidget,
@@ -346,16 +357,16 @@ class _HomePageState extends State<HomePage>
     );
   }
 
-  SliverToBoxAdapter _createHorizontaCustomAnimelList(ApplicationStore appStore,
+  SliverToBoxAdapter _createHorizontaCustomAnimelList(
           {required double width,
           String? tag,
           required ScrollController controller}) =>
       SliverToBoxAdapter(
         child: Container(
           height: width * 1.4,
-          child: Observer(
-            builder: (_) {
-              var data = appStore.myAnimeMap.values.toList();
+          child: BlocBuilder<ApplicationBloc, ApplicationState>(
+            builder: (context, state) {
+              var data = state.myAnimeMap.values.toList();
               return ListView.builder(
                 controller: controller,
                 itemBuilder: (context, index) {
@@ -371,8 +382,8 @@ class _HomePageState extends State<HomePage>
                       height: width * 1.4,
                       imageUrl: anime.imageUrl,
                       imageHeroTag: heroTag,
-                      onTap: () => _openAnimeDetailsPage(
-                          context, anime, heroTag, appStore),
+                      onTap: () =>
+                          _openAnimeDetailsPage(context, anime, heroTag),
                     ),
                   );
                 },
@@ -392,62 +403,57 @@ class _HomePageState extends State<HomePage>
       SliverToBoxAdapter(
         child: Container(
           height: width * .9,
-          child: Observer(
-            builder: (context) {
-              return ListView.builder(
-                controller: controller,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding:
-                        EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
-                    child: ItemView(
-                      width: width * 1.3,
-                      height: width * .9,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.max,
-                        children: <Widget>[
-                          Expanded(
-                              child: Text(
-                            data[index],
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 25,
-                            ),
-                          ))
-                        ],
-                      ),
-                      backgroundColor: _randomColor.randomColor(
-                        colorHue: ColorHue.multiple(
-                          colorHues: [
-                            ColorHue.blue,
-                          ],
+          child: ListView.builder(
+            controller: controller,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4.0, vertical: 12.0),
+                child: ItemView(
+                  width: width * 1.3,
+                  height: width * .9,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.max,
+                    children: <Widget>[
+                      Expanded(
+                          child: Text(
+                        data[index],
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 25,
                         ),
-                        colorBrightness: ColorBrightness.dark,
-                      ),
-                      onTap: () {
-                        Navigator.push(
-                            context,
-                            CupertinoPageRoute(
-                                builder: (context) =>
-                                    GenreAnimePage(genreName: data[index])));
-                      },
+                      ))
+                    ],
+                  ),
+                  backgroundColor: _randomColor.randomColor(
+                    colorHue: ColorHue.multiple(
+                      colorHues: [
+                        ColorHue.blue,
+                      ],
                     ),
-                  );
-                },
-                scrollDirection: Axis.horizontal,
-                itemCount: data.length,
-                physics: BouncingScrollPhysics(),
+                    colorBrightness: ColorBrightness.dark,
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                            builder: (context) =>
+                                GenreAnimePage(genreName: data[index])));
+                  },
+                ),
               );
             },
+            scrollDirection: Axis.horizontal,
+            itemCount: data.length,
+            physics: BouncingScrollPhysics(),
           ),
         ),
       );
 
   SliverToBoxAdapter _createHorizontalEpisodeList(BuildContext context,
-          {required List<EpisodeItem> data, required double width}) =>
+          {required List<EpisodeModel> data, required double width}) =>
       SliverToBoxAdapter(
         child: Container(
           height: width + 24,
@@ -460,9 +466,9 @@ class _HomePageState extends State<HomePage>
                 child: EpisodeItemView(
                   width: width * 1.3,
                   height: width * .9,
-                  imageUrl: data[index].imageUrl,
-                  title: data[index].title,
-                  onTap: () => _playEpisode(context, data[index].id),
+                  imageUrl: data[index].imageUrl ?? '',
+                  title: data[index].title ?? 'Episode ${data[index].number}',
+                  onTap: () => _playEpisode(context, data[index]),
                 ),
               );
             },
@@ -474,25 +480,22 @@ class _HomePageState extends State<HomePage>
   void _openLatestEpisodePage(BuildContext context) => Navigator.push(context,
       CupertinoPageRoute(builder: (context) => RecentEpisodeListPage()));
 
-  void _openAnimeDetailsPage(BuildContext context, AnimeItem anime,
-          String heroTag, ApplicationStore appStore) =>
+  void _openAnimeDetailsPage(
+          BuildContext context, AnimeModel anime, String heroTag) =>
       Navigator.push(
           context,
           CupertinoPageRoute(
-            builder: (context) => Provider<AnimeDetailsStore>(
-              create: (_) => AnimeDetailsStore(appStore, anime),
-              child: AnimeDetailsScreen(
-                heroTag: heroTag,
-              ),
+            builder: (context) => AnimeDetailsScreen(
+              heroTag: heroTag,
+              anime: anime,
             ),
           ));
 
   Widget _createDayReleaseCarousel(
           {required BuildContext context,
-          required ApplicationStore appStore,
           required double width,
           required double height}) =>
-      Observer(builder: (_) {
+      BlocBuilder<ApplicationBloc, ApplicationState>(builder: (context, state) {
         return Carousel(
           showIndicator: true,
           autoplay: false,
@@ -501,27 +504,26 @@ class _HomePageState extends State<HomePage>
           dotSize: 6.0,
           overlayShadow: true,
           images: List.generate(
-              (appStore.dayReleaseList.length >= 12)
+              (state.dayReleaseList.length >= 12)
                   ? 12
-                  : appStore.dayReleaseList.length, (index) {
-            var heroTag =
-                '${appStore.dayReleaseList[index].id}$heroTagCarousel';
+                  : state.dayReleaseList.length, (index) {
+            var heroTag = '${state.dayReleaseList[index].id}$heroTagCarousel';
             return ItemView(
               borderRadius: .0,
-              tooltip: appStore.dayReleaseList[index].title,
-              imageUrl: appStore.dayReleaseList[index].imageUrl,
+              tooltip: state.dayReleaseList[index].title,
+              imageUrl: state.dayReleaseList[index].imageUrl,
               width: width,
               imageHeroTag: heroTag,
               height: height,
               onTap: () => _openAnimeDetailsPage(
-                  context, appStore.dayReleaseList[index], heroTag, appStore),
+                  context, state.dayReleaseList[index], heroTag),
             );
           }),
         );
       });
 
   void _openAnimeItemGridPage(
-      BuildContext context, List<AnimeItem> data, String title, String heroTag,
+      BuildContext context, List<AnimeModel> data, String title, String heroTag,
       {List<Widget>? actions}) {
     Navigator.push(
         context,
@@ -535,12 +537,15 @@ class _HomePageState extends State<HomePage>
         ));
   }
 
-  void _playEpisode(BuildContext context, String episodeId) {
+  void _playEpisode(BuildContext context, EpisodeModel episode) {
+    // Note: We need anime title for VideoPlayerScreen
+    // For now, we'll use a placeholder. In a real app, this should be passed from the state
     Navigator.push(
         context,
         CupertinoPageRoute(
             builder: (context) => VideoPlayerScreen(
-                  episodeId: episodeId,
+                  animeTitle: 'Unknown', // TODO: Pass actual anime title from state
+                  episodeNumber: episode.number,
                 )));
   }
 }
