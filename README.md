@@ -205,7 +205,6 @@ This project is open source and available for educational purposes. Please ensur
 
 - [Jikan API](https://jikan.moe/) - MyAnimeList unofficial API
 - [Consumet API](https://github.com/consumet/api.consumet.org) - Multi-provider anime streaming API
-- Original concept inspired by [sc4v3ng3r's anime app](https://github.com/sc4v3ng3r/animeapp_course)
 
 ---
 
